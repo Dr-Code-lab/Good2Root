@@ -1,0 +1,41 @@
+BONUS 2 - File system bash history.
+
+We try to extract info from iso file using python and pycdlib library.
+
+1. Run `python3 ../scripts/solution4_script.py` to set the environment and install the requirements
+
+2. run `python3 ../scripts/ls_iso.py '/' ../../Downloads/BornToSecHackMe-v1.1.iso` to search for a filesystem file
+```
+$ ./ls_iso.py '/' ../BornToSecHackMe-v1.1.iso 
+.
+..
+CASPER
+INSTALL
+ISOLINUX
+MD5SUM.TXT;1
+PRESEED
+README.DISKDEFINES;1
+UBUNTU.;1
+_DISK
+
+$ ./ls_iso.py '/CASPER' ../BornToSecHackMe-v1.1.iso
+.
+..
+FILESYSTEM.MANIFEST;1
+FILESYSTEM.MANIFEST_DESKTOP;1
+FILESYSTEM.SIZE;1
+FILESYSTEM.SQUASHFS;1
+INITRD.GZ;1
+README.DISKDEFINES;1
+VMLINUZ.;1
+```
+
+3. run `../scripts/extract_file_iso.py '/root/.bash_history' ../../Downloads/BornToSecHackMe-v1.1.iso` to look for a root history
+
+4. look through output file with ctrl+F and search for 'adduser' command typings
+somewhere out there we see adduser zaz and password
+
+```
+adduser zaz
+646da671ca01bb5d84dbb5fb2238dc8e
+```

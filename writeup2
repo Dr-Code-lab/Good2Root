@@ -1,0 +1,28 @@
+WAY 2 - Just push a button.
+
+Check kernel version:
+
+	uname -r
+		Output:
+			3.2.0-91-generic-pae
+
+Check distributive version Linux:
+
+	lsb_release -a
+		Output:
+			No LSB modules are available.
+			Distributor ID:	Ubuntu
+			Description:	Ubuntu 12.04.5 LTS
+			Release:	12.04
+			Codename:	precise
+
+There is a public vulnerability for the kernel version 2.6.22 < 3.9.
+
+In time booting system spam ESC until you get GRUB:
+	Output:
+		 aborted
+		boot: _
+
+Write "live init=/bin/bash" and press Enter.
+
+Welcome to 'root'!

